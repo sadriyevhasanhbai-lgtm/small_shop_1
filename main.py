@@ -1,35 +1,38 @@
 import inventory
 import sales as sales_module
- 
- 
-def money(amount):
+from models import Product, Sale
+
+
+def money(amount: int) -> str:
     return f"{amount:,} UZS"
- 
- 
-def print_products(items):
+
+
+def print_products(items: list[Product]) -> None:
     print(f"{'ID':<10}{'Nomi':<25}{'Narx':>16}{'Qoldiq':>10}")
     print("-" * 61)
     for p in items:
-        print(f"{p['id']:<10}{p['name']:<25}{money(p['price']):>16}{p['stock']:>10}")
- 
- 
-def menu_add(products):
+        print(f"{p.id:<10}{p.name:<25}{money(p.price):>16}{p.stock:>10}")
+
+
+def menu_add(products: list[Product]) -> None:
     product_id = input("Mahsulot ID: ")
     name = input("Nomi: ")
     price = input("Narxi (UZS): ")
     stock = input("Ombordagi soni: ")
-    ok, message = inventory.add_product(products, product_id, name, price, stock)
+    _, message = inventory.add_product(
+        products, product_id, name, price, stock
+    )
     print(message)
- 
- 
-def menu_list(products):
+
+
+def menu_list(products: list[Product]) -> None:
     if not products:
         print("Ombor bo'sh. Avval mahsulot qo'shing.")
         return
     print_products(products)
- 
- 
-def menu_search(products):
+
+
+def menu_search(products: list[Product]) -> None:
     if not products:
         print("Ombor bo'sh. Qidirish uchun mahsulot yo'q.")
         return
@@ -39,69 +42,75 @@ def menu_search(products):
         print("Hech narsa topilmadi.")
         return
     print_products(found)
- 
- 
-def menu_restock(products):
+
+
+def menu_restock(products: list[Product]) -> None:
     if not products:
         print("Ombor bo'sh. Avval mahsulot qo'shing.")
         return
     product_id = input("Mahsulot ID: ")
     quantity = input("Qo'shiladigan miqdor: ")
-    ok, message = inventory.restock_product(products, product_id, quantity)
+    _, message = inventory.restock_product(products, product_id, quantity)
     print(message)
- 
- 
-def menu_sale(products, sales):
+
+
+def menu_sale(products: list[Product], sales: list[Sale]) -> None:
     if not products:
         print("Ombor bo'sh. Sotish uchun mahsulot yo'q.")
         return
     product_id = input("Mahsulot ID: ")
     quantity = input("Miqdor: ")
-    ok, message = sales_module.record_sale(products, sales, product_id, quantity)
+    _, message = sales_module.record_sale(
+        products, sales, product_id, quantity
+    )
     print(message)
- 
- 
-def menu_history(sales):
+
+
+def menu_history(sales: list[Sale]) -> None:
     if not sales:
         print("Sotuvlar tarixi hozircha bo'sh.")
         return
     print(f"{'Mahsulot':<25}{'Miqdor':>8}{'Narx':>16}{'Jami':>18}")
     print("-" * 67)
     for s in sales:
-        print(f"{s['name']:<25}{s['quantity']:>8}"
-              f"{money(s['unit_price']):>16}{money(s['total']):>18}")
- 
- 
-def menu_reports(products, sales):
+        print(f"{s.name:<25}{s.quantity:>8}"
+              f"{money(s.unit_price):>16}{money(s.total):>18}")
+
+
+def menu_reports(products: list[Product], sales: list[Sale]) -> None:
     print("--- Hisobotlar ---")
     print(f"Umumiy tushum: {money(sales_module.total_revenue(sales))}")
- 
+
     average = sales_module.average_sale_amount(sales)
     if average is None:
         print("O'rtacha sotuv: sotuvlar hali yo'q")
     else:
         print(f"O'rtacha sotuv: {average:,.0f} UZS")
- 
+
     best = sales_module.best_selling_product(sales)
     if best is None:
         print("Eng ko'p sotilgan mahsulot: sotuvlar hali yo'q")
     else:
-        print(f"Eng ko'p sotilgan mahsulot: {best['name']} ({best['quantity']} dona)")
- 
-    print(f"Ombordagi tovarlar qiymati: {money(inventory.total_inventory_value(products))}")
- 
+        print(
+            f"Eng ko'p sotilgan mahsulot: {best.name} "
+            f"({best.quantity} dona)"
+        )
+
+    total_value = inventory.total_inventory_value(products)
+    print(f"Ombordagi tovarlar qiymati: {money(total_value)}")
+
     low = sales_module.low_stock_products(products)
     if not low:
         print("Qoldig'i 5 yoki undan kam mahsulotlar: yo'q")
     else:
         print("Qoldig'i 5 yoki undan kam mahsulotlar:")
         print_products(low)
- 
- 
-def main():
+
+
+def main() -> None:
     products = inventory.load_products()
     sales = sales_module.load_sales()
- 
+
     while True:
         print("\n=== Kichik do'kon ===")
         print("1. Mahsulot qo'shish")
@@ -113,7 +122,7 @@ def main():
         print("7. Hisobotlar")
         print("0. Chiqish")
         choice = input("Tanlang: ").strip()
- 
+
         if choice == "1":
             menu_add(products)
         elif choice == "2":
@@ -133,8 +142,8 @@ def main():
             break
         else:
             print("Noto'g'ri tanlov. 0 dan 7 gacha raqam kiriting.")
- 
- 
+
+
 if __name__ == "__main__":
     try:
         main()

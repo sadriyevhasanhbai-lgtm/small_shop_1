@@ -2,6 +2,9 @@ import json
 import os
 
 import numpy as np
+from pydantic import ValidationError
+
+from models import Product, ProductList
 
 # Fayl yo'li shu .py fayl turgan papkaga bog'langan,
 # shuning uchun dasturni qayerdan ishga tushirsangiz ham bir xil ishlaydi.
@@ -9,10 +12,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PRODUCTS_FILE = os.path.join(BASE_DIR, "products.json")
 
 
-def parse_int(text):
+def parse_int(text: str) -> int | None:
     """Matnni butun songa aylantiradi. Bo'lmasa None qaytaradi."""
     text = text.strip()
-    if "_" in text:          # Python "1_000" ni ham son deb qabul qiladi, biz yo'q
+    # Python "1_000" ni ham son deb qabul qiladi, biz yo'q.
+    if "_" in text:
         return None
     try:
         return int(text)
@@ -20,31 +24,45 @@ def parse_int(text):
         return None
 
 
-def load_products():
+def load_products() -> list[Product]:
     """products.json ni o'qiydi. Fayl yo'q yoki buzuq bo'lsa, bo'sh ro'yxat."""
     try:
         with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
-    return data if isinstance(data, list) else []
+    try:
+        return ProductList.model_validate(data).root
+    except ValidationError:
+        return []
 
 
-def save_products(products):
+def save_products(products: list[Product]) -> None:
     """Mahsulotlar ro'yxatini products.json ga yozadi."""
     with open(PRODUCTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(products, f, indent=2, ensure_ascii=False)
+        json.dump(
+            [p.model_dump() for p in products],
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
 
 
-def find_product(products, product_id):
+def find_product(products: list[Product], product_id: str) -> Product | None:
     """ID bo'yicha mahsulotni topadi. Topilmasa None."""
     for product in products:
-        if product["id"] == product_id:
+        if product.id == product_id:
             return product
     return None
 
 
-def add_product(products, product_id, name, price_text, stock_text):
+def add_product(
+    products: list[Product],
+    product_id: str,
+    name: str,
+    price_text: str,
+    stock_text: str,
+) -> tuple[bool, str]:
     """Yangi mahsulot qo'shadi. (ok, xabar) qaytaradi."""
     product_id = product_id.strip()
     name = name.strip()
@@ -62,23 +80,35 @@ def add_product(products, product_id, name, price_text, stock_text):
 
     stock = parse_int(stock_text)
     if stock is None or stock < 0:
-        return False, "Ombordagi soni 0 yoki undan katta butun son bo'lishi kerak."
+        return False, (
+            "Ombordagi soni 0 yoki undan katta butun son bo'lishi kerak."
+        )
 
-    products.append({"id": product_id, "name": name, "price": price, "stock": stock})
+    try:
+        product = Product(id=product_id, name=name, price=price, stock=stock)
+    except ValidationError:
+        return False, "Mahsulot ma'lumotlari noto'g'ri."
+
+    products.append(product)
     save_products(products)
     return True, "Mahsulot qo'shildi."
 
 
-def search_products(products, query):
-    """Nom (qismi bo'yicha, harf kattaligiga qaramay) yoki ID (aniq) bo'yicha qidiradi."""
+def search_products(products: list[Product], query: str) -> list[Product]:
+    """Nom (qismi bo'yicha, harf kattaligiga qaramay) yoki ID (aniq) bo'yicha
+    qidiradi."""
     query = query.strip()
     if query == "":
         return []
     q = query.lower()
-    return [p for p in products if q in p["name"].lower() or p["id"] == query]
+    return [p for p in products if q in p.name.lower() or p.id == query]
 
 
-def restock_product(products, product_id, quantity_text):
+def restock_product(
+    products: list[Product],
+    product_id: str,
+    quantity_text: str,
+) -> tuple[bool, str]:
     """Mavjud mahsulot soniga qo'shadi. (ok, xabar) qaytaradi."""
     product = find_product(products, product_id.strip())
     if product is None:
@@ -88,30 +118,37 @@ def restock_product(products, product_id, quantity_text):
     if quantity is None or quantity <= 0:
         return False, "Miqdor musbat butun son bo'lishi kerak."
 
-    product["stock"] += quantity
+    product.stock += quantity
     save_products(products)
-    return True, f"Zaxira to'ldirildi. Yangi qoldiq: {product['stock']} dona."
+    return True, f"Zaxira to'ldirildi. Yangi qoldiq: {product.stock} dona."
 
 
-def reduce_stock(products, product_id, quantity):
-    """Sotuv uchun ombordan ayiradi. Yetarli bo'lmasa hech narsa o'zgarmaydi."""
+def reduce_stock(
+    products: list[Product],
+    product_id: str,
+    quantity: int,
+) -> tuple[bool, str]:
+    """Sotuv uchun ombordan ayiradi.
+
+    Yetarli bo'lmasa hech narsa o'zgarmaydi.
+    """
     product = find_product(products, product_id)
     if product is None:
         return False, "Mahsulot topilmadi."
     if quantity <= 0:
         return False, "Miqdor musbat bo'lishi kerak."
-    if quantity > product["stock"]:
-        return False, f"Omborda faqat {product['stock']} dona bor."
+    if quantity > product.stock:
+        return False, f"Omborda faqat {product.stock} dona bor."
 
-    product["stock"] -= quantity
+    product.stock -= quantity
     save_products(products)
     return True, "Ombor yangilandi."
 
 
-def total_inventory_value(products):
+def total_inventory_value(products: list[Product]) -> int:
     """Ombordagi hamma tovarning umumiy qiymati (NumPy bilan)."""
     if not products:
         return 0
-    prices = np.array([p["price"] for p in products], dtype=np.int64)
-    stocks = np.array([p["stock"] for p in products], dtype=np.int64)
+    prices = np.array([p.price for p in products], dtype=np.int64)
+    stocks = np.array([p.stock for p in products], dtype=np.int64)
     return int(np.sum(prices * stocks))
