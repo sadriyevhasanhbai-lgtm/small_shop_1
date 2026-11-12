@@ -1,2 +1,4 @@
 __pycache__/
 .venv/
+products.json
+sales.json
